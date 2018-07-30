@@ -1,4 +1,3 @@
-
 # APak
 
 Simple Packing Algorithm optimized to bundle Resources together
@@ -9,6 +8,40 @@ The main Usage of this Algorithm lies in the bundling of embedded Resources toge
 Instead of adding many Resources to an Application, all Files can be packed into a single Resource.
 It's also usable whenever Data can only be processed in a single use Stream that can't be seeked, for example network Streams.
 The Simplicity requires almost no Memory and no complex Operations with Compression being completely optional.
+
+Using APak in your code is very simple:
+
+### Packing Files
+
+	using (var FS = File.Create(@"C:\TestFile.pak"))
+	{
+		APak.Pack(APak.GetFiles(@"C:\Test"), FS);
+	}
+
+The Method `APak.GetFiles` builds the Directory Listing for a Pak File. Arguments:
+
+1. The Root Directory to scan. String
+
+The Method `APak.Pack` packs the Files together. Arguments:
+
+1. File Listing from `APak.GetFiles`. IEnumerable<FileSpec>
+2. Stream to write to. Stream
+3. (opt) Compression Algorithm. Compression; Defaults to `Compression.AllCompression`
+4. (opt) Log Output. TextWriter; Defaults to `null`
+
+### Unpacking Files
+
+	using (var FS = File.OpenRead(@"C:\TestFile.pak"))
+	{
+		APak.Unpack(FS, @"C:\PakOutput");
+	}
+
+The Method `APak.Unpack` extracts all Files and Directories from a Pak File. Arguments:
+
+1. Reader positioned at the Start of a pak Header. Stream
+2. (opt) Output Directory. String; If not specified, the Stream is scanned for all Entries but nothing is extracted
+3. (opt) Collect File Entries. Bool; Defaults to `false`. The Function will return a List of all Entries if set to `true`
+4. (opt) Log Output. TextWriter; Defaults to `null`
 
 ## Usage examples
 
