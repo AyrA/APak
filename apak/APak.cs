@@ -121,7 +121,7 @@ namespace apak
             {
                 return Encoding.UTF8.GetString(BR.ReadBytes(Count));
             }
-            if(Count<0)
+            if (Count < 0)
             {
                 throw new InvalidDataException($"Invalid String Length Specifier. Got {Count}");
             }
@@ -331,7 +331,7 @@ namespace apak
                 {
                     var Flags = (EntryType)BR.ReadByte();
                     var Name = RS(BR).TrimStart('/').Replace('/', '\\');
-                    if(string.IsNullOrWhiteSpace(Name))
+                    if (string.IsNullOrWhiteSpace(Name))
                     {
                         throw new InvalidDataException("Entry Name is Empty");
                     }
