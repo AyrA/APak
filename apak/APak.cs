@@ -121,6 +121,10 @@ namespace apak
             {
                 return Encoding.UTF8.GetString(BR.ReadBytes(Count));
             }
+            if(Count<0)
+            {
+                throw new InvalidDataException($"Invalid String Length Specifier. Got {Count}");
+            }
             return string.Empty;
         }
 
@@ -278,7 +282,7 @@ namespace apak
             }
 
             //This combination would do nothing and report nothing
-            if(string.IsNullOrWhiteSpace(OutputDirectory) && !CollectFiles)
+            if (string.IsNullOrWhiteSpace(OutputDirectory) && !CollectFiles)
             {
                 throw new ArgumentException("Either 'OutputDirectory' or 'CollectFiles' must be set (or both)");
             }
@@ -327,6 +331,10 @@ namespace apak
                 {
                     var Flags = (EntryType)BR.ReadByte();
                     var Name = RS(BR).TrimStart('/').Replace('/', '\\');
+                    if(string.IsNullOrWhiteSpace(Name))
+                    {
+                        throw new InvalidDataException("Entry Name is Empty");
+                    }
                     var CurrentFile = new FileSpec(Path.GetFullPath(Path.Combine(RootDirectory, Name)), Name, Flags.HasFlag(EntryType.Directory));
                     if (CollectFiles)
                     {
