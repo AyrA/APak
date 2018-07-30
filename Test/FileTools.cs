@@ -6,6 +6,9 @@ using System.Runtime.InteropServices;
 
 namespace Test
 {
+    /// <summary>
+    /// Provides Low-Level File API Wrappers
+    /// </summary>
     public static class FileTools
     {
         #region WIN_API

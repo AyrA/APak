@@ -5,16 +5,38 @@ using System.IO;
 
 namespace Test
 {
+    /// <summary>
+    /// Main Class
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// Provides a structured way to represent possible Arguments
+        /// </summary>
         private struct CMD
         {
+            /// <summary>
+            /// Argument Set is value
+            /// </summary>
             public bool Valid;
+            /// <summary>
+            /// Compression to use when packing
+            /// </summary>
             public APak.CompressionType Compression;
+            /// <summary>
+            /// Source File or Directory
+            /// </summary>
             public string Source;
+            /// <summary>
+            /// Destination File or Directory
+            /// </summary>
             public string Destination;
         }
 
+        /// <summary>
+        /// Main Entry Point
+        /// </summary>
+        /// <param name="args">Command Line Arguments</param>
         static void Main(string[] args)
         {
             if (args == null || args.Length == 0 || args.Any(m => m == "/?"))
@@ -67,6 +89,11 @@ namespace Test
             }
         }
 
+        /// <summary>
+        /// Parses Command line arguments into a Structure
+        /// </summary>
+        /// <param name="args">Arguments</param>
+        /// <returns>Structure</returns>
         private static CMD ParseArgs(string[] args)
         {
             const APak.CompressionType INVALID = (APak.CompressionType)255;
@@ -171,6 +198,9 @@ namespace Test
             return Ret;
         }
 
+        /// <summary>
+        /// Shows Help to the User
+        /// </summary>
         static void ShowHelp()
         {
             Console.Error.WriteLine(@"apak [/C{A|N|I}] <in> <out>
