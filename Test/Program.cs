@@ -38,7 +38,7 @@ namespace Test
                         }
                         using (var FS = File.OpenRead(IN))
                         {
-                            APak.Unpack(FS, OUT, Console.Error);
+                            APak.Unpack(FS, OUT, false, Console.Error);
                         }
                     }
                     //Pack mode
@@ -81,7 +81,7 @@ namespace Test
                     case "/ca":
                         if (Ret.Compression == INVALID)
                         {
-                            Ret.Compression = APak.CompressionType.AllCompression;
+                            Ret.Compression = APak.CompressionType.AllCompressionGZip;
                         }
                         else
                         {
@@ -133,7 +133,7 @@ namespace Test
                 //Apply default if needed
                 if (Ret.Compression == INVALID)
                 {
-                    Ret.Compression = APak.CompressionType.AllCompression;
+                    Ret.Compression = APak.CompressionType.AllCompressionGZip;
                 }
                 //Make sure that 'in' is specified
                 if (string.IsNullOrWhiteSpace(Ret.Source))
