@@ -7,28 +7,79 @@ using System.Text;
 
 namespace apak
 {
+    /// <summary>
+    /// Provides the Ability to pack and unpack files
+    /// </summary>
     public static class APak
     {
-        private const int I32_SIZE = 4;
-        private const int I64_SIZE = 8;
+        /// <summary>
+        /// Size of a 32 bit integer
+        /// </summary>
+        private const int I32_SIZE = sizeof(int);
+        /// <summary>
+        /// Size of a 64 bit integer
+        /// </summary>
+        private const int I64_SIZE = sizeof(long);
+        /// <summary>
+        /// PAK Header
+        /// </summary>
         private const string HEADER = "APAK";
 
+        /// <summary>
+        /// Types of PAK Entries
+        /// </summary>
+        /// <remarks>Not all combinations are valid</remarks>
         [Flags]
         private enum EntryType : byte
         {
+            /// <summary>
+            /// Unsupported
+            /// </summary>
             Regular = 0,
+            /// <summary>
+            /// Entry is a File
+            /// </summary>
             File = 1,
+            /// <summary>
+            /// Entry is a Directory
+            /// </summary>
             Directory = 2,
-            Compressed = 4
+            /// <summary>
+            /// The content is compressed
+            /// </summary>
+            /// <remarks>This can only be used for entries that have a content</remarks>
+            GZip = 4
         }
 
+        /// <summary>
+        /// Possible Compression Types
+        /// </summary>
         public enum CompressionType : byte
         {
+            /// <summary>
+            /// No Compression at all
+            /// </summary>
             NoCompression = 0,
+            /// <summary>
+            /// Compress all files but individually
+            /// </summary>
             IndividualCompression = 1,
-            AllCompression = 2
+            /// <summary>
+            /// Compress all files but in one single blob (Solid Compression)
+            /// </summary>
+            AllCompressionGZip = 2
         }
 
+        /// <summary>
+        /// Gets a relative path (if applicable) from a full path
+        /// </summary>
+        /// <param name="Name">Full Name</param>
+        /// <param name="Root">Root Directory</param>
+        /// <returns>Relative String or <paramref name="Name"/> if not a sub-element of <paramref name="Root"/></returns>
+        /// <remarks>
+        /// This method provides no value validation at all. 
+        /// Don't expose to other components
+        /// </remarks>
         private static string GetRelPath(string Name, string Root)
         {
             if (Name.ToLower().StartsWith(Root.ToLower()))
@@ -38,20 +89,31 @@ namespace apak
             return Name;
         }
 
-        private static void WS(Stream Output, string FileName)
+        /// <summary>
+        /// Writes an integer prefixed UTF-8 string to a <see cref="Stream"/>
+        /// </summary>
+        /// <param name="Output">Stream to write to</param>
+        /// <param name="Value">String to write</param>
+        private static void WS(Stream Output, string Value)
         {
-            if (string.IsNullOrEmpty(FileName))
+            //Write a zero integer and exit for empty/null strings
+            if (string.IsNullOrEmpty(Value))
             {
                 Output.Write(BitConverter.GetBytes(0), 0, I32_SIZE);
             }
             else
             {
-                int Len = Encoding.UTF8.GetByteCount(FileName);
-                Output.Write(BitConverter.GetBytes(Len), 0, I32_SIZE);
-                Output.Write(Encoding.UTF8.GetBytes(FileName), 0, Len);
+                var Bytes = Encoding.UTF8.GetBytes(Value);
+                Output.Write(BitConverter.GetBytes(Bytes.Length), 0, I32_SIZE);
+                Output.Write(Bytes, 0, Bytes.Length);
             }
         }
 
+        /// <summary>
+        /// Reads an integer prefixed UTF-8 string from a <see cref="Stream"/>
+        /// </summary>
+        /// <param name="BR">Reader</param>
+        /// <returns>string</returns>
         private static string RS(BinaryReader BR)
         {
             int Count = BR.ReadInt32();
@@ -62,6 +124,13 @@ namespace apak
             return string.Empty;
         }
 
+        /// <summary>
+        /// Copies a <see cref="Stream"/> onto another but only as many bytes as specified
+        /// </summary>
+        /// <param name="Input">Source <see cref="Stream"/></param>
+        /// <param name="Output">Destination <see cref="Stream"/></param>
+        /// <param name="Bytes">Number of bytes to copy</param>
+        /// <remarks>This will work correctly on <paramref name="Input"/> Steams that are shorter than <paramref name="Bytes"/> specifies</remarks>
         private static void CopyStream(Stream Input, Stream Output, long Bytes)
         {
             byte[] buffer = new byte[1000000];
@@ -73,6 +142,12 @@ namespace apak
             }
         }
 
+        /// <summary>
+        /// Creates a FileSpec List from a Directory
+        /// </summary>
+        /// <param name="RootDirectory">Directory to start scanning</param>
+        /// <returns><see cref="FileSpec"/> Array, sorted by Directory First</returns>
+        /// <remarks>This implementation doesn't handles inaccessible directories and will fail.</remarks>
         public static FileSpec[] GetFiles(string RootDirectory)
         {
             var FullPath = Path.GetFullPath(RootDirectory);
@@ -90,7 +165,17 @@ namespace apak
 
         }
 
-        public static void Pack(IEnumerable<FileSpec> Files, Stream Destination, CompressionType Compression = CompressionType.AllCompression, TextWriter Log = null)
+        /// <summary>
+        /// Packs files together
+        /// </summary>
+        /// <param name="Files">File/Directory List</param>
+        /// <param name="Destination">Destination stream. Left open after completion</param>
+        /// <param name="Compression">Compression type</param>
+        /// <param name="Log">Logger for messages</param>
+        /// <remarks>
+        /// This Implementation lacks a "per-file" selection for Compression.
+        /// </remarks>
+        public static void Pack(IEnumerable<FileSpec> Files, Stream Destination, CompressionType Compression = CompressionType.AllCompressionGZip, TextWriter Log = null)
         {
             Stream Output = Destination;
             if (Log == null)
@@ -101,13 +186,14 @@ namespace apak
             {
                 throw new ArgumentException("Output must be writable");
             }
-            Output.Write(Encoding.ASCII.GetBytes(HEADER), 0, 4);
-            Output.WriteByte((byte)(Compression == CompressionType.AllCompression ? CompressionType.AllCompression : CompressionType.NoCompression));
+            Output.Write(Encoding.ASCII.GetBytes(HEADER), 0, Encoding.ASCII.GetByteCount(HEADER));
+            Output.WriteByte((byte)(Compression == CompressionType.AllCompressionGZip ? CompressionType.AllCompressionGZip : CompressionType.NoCompression));
 
             Log.WriteLine("Saving Directory Map");
             Output.Write(BitConverter.GetBytes(Files.Count()), 0, I32_SIZE);
 
-            if (Compression == CompressionType.AllCompression)
+            //Replace output stream if all content is to be compressed
+            if (Compression == CompressionType.AllCompressionGZip)
             {
                 Output.Flush();
                 Output = new GZipStream(Output, CompressionLevel.Optimal, true);
@@ -125,7 +211,7 @@ namespace apak
                 Log.WriteLine(F.EntryName);
                 if (Compression == CompressionType.IndividualCompression)
                 {
-                    Output.WriteByte((byte)(EntryType.File | EntryType.Compressed));
+                    Output.WriteByte((byte)(EntryType.File | EntryType.GZip));
                     WS(Output, F.EntryName);
                     //Create temporary file
                     var TempName = Path.GetTempFileName();
@@ -160,14 +246,27 @@ namespace apak
                     }
                 }
             }
-            if (Compression == CompressionType.AllCompression)
+            //If all content is to be compressed, dispose our own strem
+            if (Compression == CompressionType.AllCompressionGZip)
             {
                 Output.Dispose();
             }
             Log.WriteLine("Done");
         }
 
-        public static FileSpec[] Unpack(Stream Input, string OutputDirectory = null, TextWriter Log = null)
+        /// <summary>
+        /// Unpacks files from an APAK archive
+        /// </summary>
+        /// <param name="Input">Input stream. Must be set to the start of the header. Left open after completion</param>
+        /// <param name="OutputDirectory">Output directory. If <see cref="null"/>, the file is parsed but no extraction is performed</param>
+        /// <param name="CollectFiles"><see cref="true"/> to collect and return FileSpecs</param>
+        /// <param name="Log">Logger for messages</param>
+        /// <returns>File Specs if <paramref name="CollectFiles"/> is <see cref="true"/>, otherwise <see cref="null"/></returns>
+        /// <remarks>
+        /// Using <paramref name="OutputDirectory"/>=<see cref="null"/> and <paramref name="CollectFiles"/>=<see cref="true"/> will return files only, not extract.
+        /// It's recommended to Leave <paramref name="CollectFiles"/> set to <see cref="false"/> to avoid memory problems when extracting pak files with millions of entries.
+        /// </remarks>
+        public static FileSpec[] Unpack(Stream Input, string OutputDirectory = null, bool CollectFiles = false, TextWriter Log = null)
         {
             if (Log == null)
             {
@@ -178,54 +277,99 @@ namespace apak
                 throw new ArgumentException("Input must be readable");
             }
 
+            //This combination would do nothing and report nothing
+            if(string.IsNullOrWhiteSpace(OutputDirectory) && !CollectFiles)
+            {
+                throw new ArgumentException("Either 'OutputDirectory' or 'CollectFiles' must be set (or both)");
+            }
+
             string RootDirectory = string.IsNullOrWhiteSpace(OutputDirectory) ? "." : Path.GetFullPath(OutputDirectory);
 
             CompressionType Compression;
             FileSpec[] Files;
+            int FileCount;
             using (var BR = new BinaryReader(Input, Encoding.UTF8, true))
             {
-                var Header = Encoding.ASCII.GetString(BR.ReadBytes(4));
+                var Header = Encoding.ASCII.GetString(BR.ReadBytes(Encoding.ASCII.GetByteCount(HEADER)));
                 if (Header != HEADER)
                 {
                     throw new ArgumentException("Input stream is not an APAK file");
                 }
                 Compression = (CompressionType)BR.ReadByte();
-                Files = new FileSpec[BR.ReadInt32()];
+                FileCount = BR.ReadInt32();
+                if (FileCount < 0)
+                {
+                    throw new InvalidDataException("Negative File Count speficied in Header");
+                }
+                if (CollectFiles)
+                {
+                    Files = new FileSpec[FileCount];
+                }
+                else
+                {
+                    Files = new FileSpec[0];
+                }
+            }
+            //Verify that the compression type is valid
+            if (!Enum.IsDefined(Compression.GetType(), Compression) || Compression == CompressionType.IndividualCompression)
+            {
+                throw new InvalidDataException($"Invalid Compression specified in File Header. Value was {Compression}");
             }
             //Sneakily replace source stream with GZip Stream to decompress if needed
-            if (Compression == CompressionType.AllCompression)
+            if (Compression == CompressionType.AllCompressionGZip)
             {
                 Input = new GZipStream(Input, CompressionMode.Decompress);
             }
             using (var BR = new BinaryReader(Input, Encoding.UTF8, true))
             {
-                Log.WriteLine("Processing {0} entries", Files.Length);
-                for (var i = 0; i < Files.Length; i++)
+                Log.WriteLine("Processing {0} entries", FileCount);
+                for (var i = 0; i < FileCount; i++)
                 {
                     var Flags = (EntryType)BR.ReadByte();
-                    var Name = RS(BR).Replace('/', '\\');
-                    Files[i] = new FileSpec(Path.Combine(RootDirectory, Name), Name, Flags.HasFlag(EntryType.Directory));
-                    Log.WriteLine("Reading {0} Dir={1}", Files[i].EntryName, Files[i].IsDirectory);
-                    if (Flags.HasFlag(EntryType.Directory))
+                    var Name = RS(BR).TrimStart('/').Replace('/', '\\');
+                    var CurrentFile = new FileSpec(Path.GetFullPath(Path.Combine(RootDirectory, Name)), Name, Flags.HasFlag(EntryType.Directory));
+                    if (CollectFiles)
                     {
-                        //Don't seek on directory entries
-                        Directory.CreateDirectory(Files[i].RealName);
+                        Files[i] = CurrentFile;
                     }
-                    else
+                    Log.WriteLine("Reading {0} Dir={1}", CurrentFile.EntryName, CurrentFile.IsDirectory);
+                    if (Flags == EntryType.Directory)
                     {
+                        //Don't seek on directory entries, they have no size and data.
+                        if (!CurrentFile.RealName.StartsWith(RootDirectory))
+                        {
+                            throw new InvalidDataException($"Invalid Directory Name specified. Value doen't results in s aubdirectory of {RootDirectory}. Value was {CurrentFile.RealName}");
+                        }
+                        Directory.CreateDirectory(CurrentFile.RealName);
+                    }
+                    else if (Flags.HasFlag(EntryType.File))
+                    {
+                        if (Flags != EntryType.File && Flags != (EntryType.File | EntryType.GZip))
+                        {
+                            throw new InvalidDataException($"Invalid Flag Combination for File. Value was {Flags}");
+                        }
                         var Size = BR.ReadInt64();
+                        if (Size < 0)
+                        {
+                            throw new InvalidDataException($"Invalid File Size specified. Value was {Size}");
+                        }
                         //Extract if output has been specified
                         if (!string.IsNullOrWhiteSpace(OutputDirectory))
                         {
                             Log.WriteLine("Extracting File...");
-                            var DirName = Path.GetDirectoryName(Files[i].RealName);
-                            if(!Directory.Exists(DirName))
+                            var DirName = Path.GetDirectoryName(CurrentFile.RealName);
+                            if (!DirName.StartsWith(RootDirectory))
+                            {
+                                throw new InvalidDataException($"Invalid File Name specified. Value doen't results in s aubdirectory of {RootDirectory}. Value was {CurrentFile.RealName}");
+                            }
+                            //Create directories for files too
+                            if (!Directory.Exists(DirName))
                             {
                                 Directory.CreateDirectory(DirName);
                             }
-                            using (var FS = File.Create(Files[i].RealName))
+                            using (var FS = File.Create(CurrentFile.RealName))
                             {
-                                if (Flags.HasFlag(EntryType.Compressed))
+                                if (Flags.HasFlag(EntryType.GZip))
                                 {
                                     //Decompress data
                                     using (var RS = new RangedStream(Input, Size))
@@ -245,17 +389,23 @@ namespace apak
                         }
                         else
                         {
+                            //Just seek forward, we are not extracting
                             BR.BaseStream.Seek(Size, SeekOrigin.Current);
                         }
+                    }
+                    else
+                    {
+                        throw new InvalidDataException($"Unexpected Flag Combination: {Flags}");
                     }
                 }
                 Log.WriteLine("Done");
             }
-            if (Compression == CompressionType.AllCompression)
+            //Dispose GZip stream created in this function
+            if (Compression == CompressionType.AllCompressionGZip)
             {
                 Input.Dispose();
             }
-            return Files;
+            return CollectFiles ? Files : null;
         }
     }
 }
